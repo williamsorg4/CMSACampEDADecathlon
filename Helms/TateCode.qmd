@@ -43,10 +43,11 @@ dec_performances <- dec_performances |>
          age = floor(exact_age))
  
 dec_performances <- dec_performances |>
-   group_by(competitor) |>
-   arrange(date) |>
-   mutate(elite_performance = row_number(), 
-          pr = max(overall_score)) 
+  group_by(competitor) |>
+  arrange(date) |>
+  mutate(elite_performance = row_number(), 
+          pr = max(overall_score)) |>
+  ungroup()
 
 ```
 
@@ -64,28 +65,44 @@ score_calculations <- data.frame("Event" = c("100m", "Long Jump", "Shot Put", "H
 
 score_calculations <- score_calculations |>
   mutate(get_500_points = ifelse(Event %in% c("100m", "400m", "110m Hurdles", "1500m"), 
-                                 B - (500/A)^(1/C), B + (500/A)^(1/C)), 
-         get_600_points = ifelse(Event %in% c("100m", "400m", "110m Hurdles", "1500m"), 
-                                 B - (600/A)^(1/C), B + (600/A)^(1/C)), 
+                                 B - (500/A)^(1/C), 
+                                 ifelse(Event %in% c("Long Jump", "High Jump", "Pole Vault"),
+                                        (B + (500/A)^(1/C)) / 100, B + (500/A)^(1/C))),
+         get_600_points = ifelse(Event %in% c("100m", "400m", "110m Hurdles", "1500m"),
+                                 B - (600/A)^(1/C),
+                                 ifelse(Event %in% c("Long Jump", "High Jump", "Pole Vault"),
+                                        (B + (600/A)^(1/C)) / 100, B + (600/A)^(1/C))), 
          get_700_points = ifelse(Event %in% c("100m", "400m", "110m Hurdles", "1500m"), 
-                                 B - (700/A)^(1/C), B + (700/A)^(1/C)), 
+                                 B - (700/A)^(1/C), 
+                                 ifelse(Event %in% c("Long Jump", "High Jump", "Pole Vault"),
+                                        (B + (700/A)^(1/C)) / 100, B + (700/A)^(1/C))), 
          get_800_points = ifelse(Event %in% c("100m", "400m", "110m Hurdles", "1500m"), 
-                                 B - (800/A)^(1/C), B + (800/A)^(1/C)),
+                                 B - (800/A)^(1/C), 
+                                 ifelse(Event %in% c("Long Jump", "High Jump", "Pole Vault"),
+                                        (B + (800/A)^(1/C)) / 100, B + (800/A)^(1/C))),
          get_900_points = ifelse(Event %in% c("100m", "400m", "110m Hurdles", "1500m"), 
-                                 B - (900/A)^(1/C), B + (900/A)^(1/C)), 
+                                 B - (900/A)^(1/C),
+                                 ifelse(Event %in% c("Long Jump", "High Jump", "Pole Vault"),
+                                        (B + (900/A)^(1/C)) / 100, B + (900/A)^(1/C))), 
          get_1000_points = ifelse(Event %in% c("100m", "400m", "110m Hurdles", "1500m"), 
-                                 B - (1000/A)^(1/C), B + (1000/A)^(1/C)),
+                                 B - (1000/A)^(1/C),
+                                 ifelse(Event %in% c("Long Jump", "High Jump", "Pole Vault"),
+                                        (B + (1000/A)^(1/C)) / 100, B + (1000/A)^(1/C))),
          get_1100_points = ifelse(Event %in% c("100m", "400m", "110m Hurdles", "1500m"), 
-                                 B - (1100/A)^(1/C), B + (1100/A)^(1/C)),
+                                 B - (1100/A)^(1/C),
+                                 ifelse(Event %in% c("Long Jump", "High Jump", "Pole Vault"),
+                                        (B + (1100/A)^(1/C)) / 100, B + (1100/A)^(1/C))),
          get_1200_points = ifelse(Event %in% c("100m", "400m", "110m Hurdles", "1500m"), 
-                                 B - (1200/A)^(1/C), B + (1200/A)^(1/C)),
+                                 B - (1200/A)^(1/C),
+                                 ifelse(Event %in% c("Long Jump", "High Jump", "Pole Vault"),
+                                        (B + (1200/A)^(1/C)) / 100, B + (1200/A)^(1/C))),
          increase1 = (get_600_points - get_500_points) / 1,
          increase2 = (get_700_points - get_600_points) / 1,
          increase3 = (get_800_points - get_700_points) / 1,
          increase4 = (get_900_points - get_800_points) / 1,
          increase5 = (get_1000_points - get_900_points) / 1,
          increase6 = (get_1100_points - get_1000_points) / 1,
-         increase7 = (get_1200_points - get_1100_points) / 1) 
+         increase7 = (get_1200_points - get_1100_points) / 1)
 
 ```
 
@@ -175,7 +192,7 @@ dec_performances |>
   ggplot(aes(Event, Score)) +
   geom_point() +
   theme_bw() +
-  labs(title = "Average Event Score")
+  labs(title = "Average Event Score") + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), 
         plot.title = element_text(hjust = 0.5))
 
