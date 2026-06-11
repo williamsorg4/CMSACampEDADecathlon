@@ -23,7 +23,7 @@ dec_performances <- dec_performances  |>
 
 
 event_map <- c("men_100_score" = "100m", 
-               "men_110h_score" = "100m Hurdles", 
+               "men_110h_score" = "110m Hurdles", 
                "men_400_score" = "400m", 
                "men_1500_score" = "1500m",
                "men_hj_score" = "High Jump",
@@ -196,12 +196,10 @@ event_peaks <- curves_event |>
 
 curves_event |> 
   group_by(PANEL) |> 
-  mutate(y = percent_rank(y)) |> 
-  filter(y > 0.9) |> 
-  view()
+  mutate(y = max(y) - y) |> 
+  filter(y < 2) |> 
   summarise(peak = x[which.max(y)],
             peak_length = max(x) - min(x))
-  slice_max(y)
   
 
 A + B + plot_layout(nrow = 1, widths = c(1,2))
@@ -209,11 +207,10 @@ A + B + plot_layout(nrow = 1, widths = c(1,2))
 
 
 
-
-
-
-
 ggsave("sorg/ageCurves.png", height = 1250, width = 3750, units = 'px')
+
+
+
 
 
 
@@ -244,6 +241,7 @@ dec_performances |>
   geom_col(position = "dodge")+
   scale_fill_brewer(palette = "Paired") +
   theme_minimal()
+
 
 
 
@@ -299,6 +297,8 @@ pca_athlete$x |>
 
 
 
+
+# 3 categories of the decathlon -------
 dec_performances |> 
   group_by(competitor) |> 
   mutate(num_races = n()) |> 
@@ -316,7 +316,7 @@ dec_performances |>
   GGally::ggpairs(aes(alpha = 0.07))
 
 
-
+# not much to take away
 dec_performances |> 
   group_by(competitor) |> 
   mutate(num_races = n()) |> 
@@ -327,6 +327,7 @@ dec_performances |>
 
 
 
+# Athlete archetypes ----
 percentiles <- dec_performances |> 
   group_by(competitor) |> 
   mutate(num_races = n()) |> 
@@ -394,7 +395,7 @@ dec_performances |>
 
 
 
-#
+# Clustering ------
 ath_means <- dec_performances |> 
   group_by(competitor) |> 
   summarise(across(contains("score"), ~ mean(.x, na.rm = TRUE)),
@@ -403,6 +404,7 @@ ath_means <- dec_performances |>
   ungroup()
 
 
+# Prop of total score standardized
 std_scores <- ath_means |> 
   select(-c(competitor, world_athletics_event_ranking_score, num_races)) |> 
   mutate(across(everything(), ~ .x / overall_score)) |> 
@@ -410,6 +412,17 @@ std_scores <- ath_means |>
   as_tibble() |> 
   select(-overall_score)
 
+
+## K-means ---------
+library(factoextra)
+
+# 2 clusters
+ath_means |> 
+  mutate(across(contains("score"), percent_rank)) |> 
+  select(-c(competitor, world_athletics_event_ranking_score, overall_score)) |> 
+  scale() |> 
+  as_tibble() |> 
+  fviz_nbclust(kmeans)
 
 std_prop_kmean <- std_scores |> 
   kmeans(centers = 2, nstart = 30)
@@ -429,7 +442,7 @@ ath_means |>
   geom_segment(aes(x = 0.08, xend = score, y = event, yend = event)) +
   facet_wrap(~ cluster)
 
-
+# trash plot
 ath_means |> 
   mutate(cluster = std_prop_kmean$cluster |> 
            as.factor()) |> 
@@ -448,6 +461,7 @@ ath_means |>
 
 library(ggradar)
 
+# Mid plot
 ath_means |> 
   mutate(cluster = std_prop_kmean$cluster |> 
            as.factor()) |> 
@@ -473,30 +487,7 @@ ath_means |>
   scale_color_viridis_d() +
   theme_minimal()
 
-library(factoextra)
 
-# 2 clusters
-ath_means |> 
-  mutate(across(contains("score"), percent_rank)) |> 
-  select(-c(competitor, world_athletics_event_ranking_score, overall_score)) |> 
-  scale() |> 
-  as_tibble() |> 
-  fviz_nbclust(kmeans)
-
-
-ath_means |> 
-  mutate(across(contains("score"), percent_rank)) |> 
-  select(-c(competitor, world_athletics_event_ranking_score, overall_score)) |> 
-  scale() |> 
-  as_tibble() |> 
-  fviz_nbclust(kmeans, method = 'wss')
-
-ath_means |> 
-  mutate(across(contains("score"), percent_rank)) |> 
-  select(-c(competitor, world_athletics_event_ranking_score, overall_score)) |> 
-  scale() |> 
-  as_tibble() |> 
-  fviz_nbclust(kmeans)
 
 kmean_ptile2 <- ath_means |> 
   mutate(across(contains("score"), percent_rank)) |> 
@@ -523,5 +514,36 @@ ath_means |>
            as.factor()) |> 
   group_by(cluster) |> 
   ggplot(aes(x = cluster, y = overall_score)) +
-  ggbeeswarm::geom_beeswarm() +
+  geom_boxplot() +
   theme_minimal()
+
+
+
+# GMM -----
+library(mclust)
+
+ath_means <- dec_performances |> 
+  group_by(competitor) |> 
+  summarise(across(contains("score"), ~ mean(.x, na.rm = TRUE)),
+            num_races = n()) |> 
+  filter(num_races > 9) |> 
+  ungroup()
+
+
+
+mclust_prop <- std_scores |> 
+  Mclust()
+
+
+ath_means |> 
+  mutate(across(contains("score"), percent_rank)) |> 
+  mutate(cluster = mclust_prop$classification |> 
+           as.factor(),
+         uncertainty = mclust_prop$uncertainty) |>
+  filter(uncertainty < 0.1) |> 
+  select(-c(competitor, world_athletics_event_ranking_score, overall_score, num_races)) |> 
+  select(cluster, names(event_map)) |> 
+  ggradar(fill = 1, fill.alpha = 0.1,
+          axis.labels = event_map) +
+  guides(fill = 'none') +
+  theme(legend.position = 'bottom')
