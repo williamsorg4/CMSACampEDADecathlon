@@ -16,6 +16,10 @@ library(tidyverse)
 library(ggplot2)
 library(dplyr)
 library(lubridate)
+library(mclust)
+library(gt)
+library(broom)
+library(sportyR)
 
 ```
 
@@ -106,6 +110,52 @@ score_calculations <- score_calculations |>
 
 ```
 
+In order to investigate how the difficulty of improving in each event, we will create a dataset of the athletes with their highest and lowest scores in each event and find the difference between them. Here, only competitors with 5 or more elite performances were included. 
+
+```{r}
+
+event_improvements <- dec_performances |> 
+  group_by(competitor) |>
+  filter(n() >= 5) |>
+  summarize(low_100m = min(men_100_score), 
+            high_100m = max(men_100_score), 
+            low_lj = min(men_lj_score), 
+            high_lj = max(men_lj_score), 
+            low_sp = min(men_sp_score), 
+            high_sp = max(men_sp_score), 
+            low_hj = min(men_hj_score), 
+            high_hj = max(men_hj_score), 
+            low_400m = min(men_400_score), 
+            high_400m = max(men_400_score), 
+            low_110h = min(men_110h_score), 
+            high_110h = max(men_110h_score), 
+            low_dt = min(men_dt_score), 
+            high_dt = max(men_dt_score), 
+            low_pv = min(men_pv_score), 
+            high_pv = max(men_pv_score), 
+            low_jt = min(men_jt_score), 
+            high_jt = max(men_jt_score), 
+            low_1500m = min(men_1500_score), 
+            high_1500m = max(men_1500_score), 
+            low_overall = min(overall_score),
+            high_overall = max(overall_score)) |>
+  ungroup()
+
+event_improvements <- event_improvements |>
+  mutate(improvement_100m = high_100m - low_100m,
+         improvement_lj = high_lj - low_lj, 
+         improvement_sp = high_sp - low_sp, 
+         improvement_hj = high_hj - low_hj, 
+         improvement_400m = high_400m - low_400m, 
+         improvement_110h = high_110h - low_110h,
+         improvement_dt = high_dt - low_dt, 
+         improvement_pv = high_pv - low_pv, 
+         improvement_jt = high_jt - low_jt, 
+         improvement_1500m = high_1500m - low_1500m, 
+         improvement_overall = high_overall - low_overall)
+
+```
+
 # Summaries
 
 ```{r Event Scores}
@@ -134,6 +184,68 @@ t.test(dec_performances$day1_score, dec_performances$day2_score, paired = TRUE)
 ```
 
 An interesting finding here is that there is a statistically significant difference in the means of decathlon day 1 scores and decathlon day 2 scores.  
+
+```{r Athletes by PR}
+
+dec_performances |>
+  group_by(competitor) |>
+  summarize(pr = max(pr)) |>
+  arrange(desc(pr))
+
+```
+
+```{r}
+
+summary(event_improvements$improvement_100m)
+summary(event_improvements$improvement_lj)
+summary(event_improvements$improvement_sp)
+summary(event_improvements$improvement_hj)
+summary(event_improvements$improvement_400m)
+summary(event_improvements$improvement_110h)
+summary(event_improvements$improvement_dt)
+summary(event_improvements$improvement_pv)
+summary(event_improvements$improvement_jt)
+summary(event_improvements$improvement_1500m)
+summary(event_improvements$improvement_overall)
+
+```
+
+```{r}
+
+event_improvements |> 
+  summarize(average_100m = mean(improvement_100m), 
+            average_lj = mean(improvement_lj), 
+            average_sp = mean(improvement_sp), 
+            average_hj = mean(improvement_hj), 
+            average_400m = mean(improvement_400m), 
+            average_110h = mean(improvement_110h), 
+            average_dt = mean(improvement_dt, na.rm = TRUE), 
+            average_pv = mean(improvement_pv), 
+            average_jt = mean(improvement_jt), 
+            average_1500m = mean(improvement_1500m), 
+            average_overall = mean(improvement_overall)) |>
+  pivot_longer(average_100m:average_overall, names_to = "Averages", values_to = "Value") |>
+  arrange(desc(Value))
+
+```
+
+```{r}
+event_improvements |> 
+  summarize(average_100m = median(improvement_100m), 
+            average_lj = median(improvement_lj), 
+            average_sp = median(improvement_sp), 
+            average_hj = median(improvement_hj), 
+            average_400m = median(improvement_400m), 
+            average_110h = median(improvement_110h), 
+            average_dt = median(improvement_dt, na.rm = TRUE), 
+            average_pv = median(improvement_pv), 
+            average_jt = median(improvement_jt), 
+            average_1500m = median(improvement_1500m), 
+            average_overall = median(improvement_overall)) |>
+  pivot_longer(average_100m:average_overall, names_to = "Averages", values_to = "Value") |>
+  arrange(desc(Value))
+
+```
 
 # Visualizations
 
@@ -188,22 +300,12 @@ dec_performances |>
             average_1500_score = sum(men_1500_score) / n()) |>
   pivot_longer(average_100_score:average_1500_score, 
                names_to = "Event", values_to = "Score") |>
-  arrange(desc(Score)) |>
-  ggplot(aes(Event, Score)) +
-  geom_point() +
+  ggplot(aes(x = fct_reorder(Event, Score, .desc = TRUE), y = Score)) +
+  geom_col(fill = "cornflowerblue") + 
   theme_bw() +
-  labs(title = "Average Event Score") + 
+  labs(title = "Average Event Score", y = "Average Score", x = "Event") + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), 
         plot.title = element_text(hjust = 0.5))
-
-```
-
-```{r Athletes by PR}
-
-dec_performances |>
-  group_by(competitor) |>
-  summarize(pr = max(pr)) |>
-  arrange(desc(pr))
 
 ```
 
@@ -213,8 +315,8 @@ dec_performances |>
   select(competitor, overall_score, elite_performance, pr) |>
   filter(pr >= 8670) |>
   ggplot(aes(x = elite_performance, y = overall_score)) +
-  geom_point(alpha = 0.5) +
   geom_line() + 
+  geom_point(color = "tomato", alpha = 0.5) +
   facet_wrap(~ competitor) +
   labs(title = "Overall Score by Elite Performance", subtitle = "Top 16 Athletes by PR",
        y = "Overall Score", x = "Elite Performance") +
@@ -231,8 +333,8 @@ dec_performances |>
   select(competitor, overall_score, date, pr) |>
   filter(pr >= 8670) |>
   ggplot(aes(x = date, y = overall_score)) +
-  geom_point(alpha = 0.5) +
   geom_line() + 
+  geom_point(color = "tomato", alpha = 0.5) +
   facet_wrap(~ competitor) + 
   labs(title = "Overall Scores by Date", subtitle = "Top 16 Athletes by PR", 
        y = "Overall Score", x = "Date") +
@@ -246,13 +348,13 @@ dec_performances |>
 ```{r}
 
 dec_performances |>
-  select(men_100_score, men_lj_score, men_sp_score, men_hj_score, men_400_score,
-         men_110h_score, men_dt_score, men_pv_score, men_jt_score, men_1500_score) |>
+  select(men_100_score, men_110h_score, men_lj_score, men_dt_score, men_sp_score,
+         men_pv_score, men_hj_score, men_jt_score, men_400_score, men_1500_score) |>
   pivot_longer(men_100_score:men_1500_score, 
                names_to = "Event", values_to = "Value") |>
   ggplot(aes(Value)) +
   geom_boxplot() +
-  facet_wrap(~ Event, scales = "free_y") + 
+  facet_wrap(~ fct_inorder(Event), nrow = 5) + 
   theme_bw() + 
   theme(strip.background = element_blank(), 
         plot.title = element_text(hjust = 0.5)) + 
@@ -268,7 +370,7 @@ score_calculations |>
                names_to = "Increase", values_to = "Value") |>
   ggplot(aes(Increase, Value)) +
   geom_point() +
-  facet_wrap(~ Event, scales = "free_y") + 
+  facet_wrap(~ Event, scales = "free_y", nrow = 2) + 
   theme_bw() + 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), 
         strip.background = element_blank(), 
@@ -276,5 +378,97 @@ score_calculations |>
         plot.subtitle = element_text(hjust = 0.5)) + 
   labs(title = "Needed Mark for 100 Point Increase by Event", 
        subtitle = "Intervals Cover 100 Point Increases from 500 Points to 1200 Points")
+
+```
+
+```{r}
+
+event_improvements |>
+  select(improvement_100m, improvement_110h, improvement_lj, improvement_dt, 
+         improvement_sp, improvement_pv, improvement_hj, improvement_jt, 
+         improvement_400m, improvement_1500m) |>
+  pivot_longer(improvement_100m:improvement_1500m, 
+               names_to = "Improvements", values_to = "Value") |>
+  ggplot(aes(Value)) + 
+  geom_boxplot() + 
+  facet_wrap(~ fct_inorder(Improvements), ncol = 2) +
+  theme_bw() +
+  theme(strip.background = element_blank(), 
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Event Improvement Summaries")
+
+```
+
+```{r}
+
+dec_performances |>
+  filter(overall_score == 9126) |>
+  select(men_100_score, men_lj_score, men_sp_score, men_hj_score, men_400_score,
+         men_110h_score, men_dt_score, men_pv_score, men_jt_score, men_1500_score) |>
+  pivot_longer(men_100_score:men_1500_score, names_to = "Scores", values_to = "Value") |>
+  ggplot(aes(y = Value, x = fct_reorder(Scores, Value, .desc = TRUE))) +
+  geom_col(fill = "blue2") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), 
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Kevin Mayer's WR Event Scores", y = "Score", x = "Event")
+  
+```
+
+```{r Gaussian Mixture Model}
+
+dec_mclust <- dec_performances |>
+  select(men_100_score, men_lj_score, men_sp_score, men_hj_score, men_400_score,
+         men_110h_score, men_dt_score, men_pv_score, men_jt_score, men_1500_score) |>
+  mutate(men_dt_score = ifelse(is.na(men_dt_score), 0, men_dt_score)) |>
+  Mclust()
+
+```
+
+```{r}
+
+summary(dec_mclust)
+
+```
+
+```{r}
+
+gt(tidy(dec_mclust))
+
+dec_mclust |> 
+  augment() |> 
+  ggplot(aes(x = men_1500_score , y = men_400_score, 
+             color = .class, size = .uncertainty)) +
+  geom_point(alpha = 0.5)
+
+dec_mclust |> 
+  plot(what = "BIC", 
+       legendArgs = list(x = "bottomright", ncol = 4))
+
+dec_mclust |> 
+  plot(what = "classification")
+
+```
+
+```{r}
+
+table("Clusters" = dec_mclust$classification, "Age" = dec_performances$age)
+
+```
+
+```{r}
+
+dec_probs <- dec_mclust$z
+colnames(dec_probs) <- str_c("cluster", 1:8)
+
+dec_probs <- dec_probs |>
+  as_tibble() |>
+  mutate(competitor = dec_performances$competitor, age = dec_performances$age) |>
+  pivot_longer(-c(competitor, age), names_to = "cluster", values_to = "prob")
+
+dec_probs |>
+  ggplot(aes(prob)) +
+  geom_histogram() +
+  facet_wrap(~cluster)
 
 ```
