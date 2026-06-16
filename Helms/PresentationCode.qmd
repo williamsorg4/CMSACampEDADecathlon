@@ -1,0 +1,98 @@
+---
+title: "Presentation Code"
+author: "Tate Helms"
+format: html
+editor: visual
+---
+
+```{r Loading Libraries}
+
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(gt)
+library(broom)
+library(ggdendro)
+library(factoextra)
+
+```
+
+```{r Loading Data}
+
+dec_performances <- read_csv("https://raw.githubusercontent.com/36-SURE/2026/main/data/dec_performances.csv")
+
+```
+
+```{r Adding Variables}
+
+dec_performances <- dec_performances |>
+  mutate(day1_score = men_100_score + men_lj_score + men_sp_score + men_hj_score + men_400_score,
+         day2_score = men_110h_score + ifelse(is.na(men_dt_score), 0, men_dt_score) + men_pv_score + men_jt_score + men_1500_score)
+
+dec_performances <- dec_performances |>
+  mutate(dob = as.Date(dob, format = "%m/%d/%Y"), 
+         date = as.Date(date, format = "%m/%d/%Y"), 
+         exact_age = interval(dob, date) / years(1), 
+         exact_age = ifelse(exact_age > 95, NA, exact_age), 
+         age = floor(exact_age))
+
+```
+
+```{r Creating Nice Table Summary of Dataset}
+
+data_table <- dec_performances |>
+  select(competitor, age, men_100, men_100_score, overall_score) |>
+  head(n = 5) |>
+  gt() |>
+  cols_label(competitor = "Competitor", age = "Age", men_100 = "100m Time", 
+             men_100_score = "100m Score", overall_score = "Overall Score")
+  
+data_table
+
+```
+
+```{r Conducting Complete Hierarchical Clustering}
+
+dec_hclustering <- dec_performances |>
+  filter(day1_score + day2_score >= 6400) |>
+  mutate(std_day1_score = as.numeric(scale(day1_score)),
+         std_day2_score = as.numeric(scale(day2_score)))
+
+dec_distance <- dec_hclustering |>
+  select(std_day1_score, std_day2_score) |>
+  dist()
+
+dec_complete_hclustering <- dec_distance |>
+  hclust(method = "complete")
+
+```
+
+```{r Complete Hierarchical Clustering Dendrogram}
+
+dendrogram <- dec_complete_hclustering |> 
+  ggdendrogram(labels = FALSE, leaf_labels = FALSE, theme_dendro = FALSE) +  
+  geom_hline(yintercept = 4.5, color = "red") +
+  labs(y = "Dissimilarity between clusters") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), 
+        axis.title.x = element_blank(),
+        panel.grid = element_blank())
+
+dendrogram
+
+```
+
+```{r Clustering Visual}
+
+clustering_visual <- dec_hclustering |>
+  mutate(cluster = as.factor(cutree(dec_complete_hclustering, h = 4.5))) |>
+  ggplot(aes(x = day1_score, y = day2_score, color = cluster)) +
+  geom_point(alpha = 0.4) + 
+  scale_color_manual(values = c("darkred", "#005AB5", "#222222", "#ffcad4")) + 
+  theme_minimal() + 
+  labs(y = "Day 2 Score", x = "Day 1 Score", color = "Cluster")
+
+clustering_visual
+
+```

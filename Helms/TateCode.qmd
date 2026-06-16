@@ -1,5 +1,6 @@
 ---
-title: "Decathlon"
+title: "Decathlon EDA"
+author: "Tate Helms"
 format: html
 editor: visual
 ---
@@ -20,6 +21,9 @@ library(mclust)
 library(gt)
 library(broom)
 library(sportyR)
+library(ggdendro)
+library(factoextra)
+library(RColorBrewer)
 
 ```
 
@@ -57,7 +61,7 @@ dec_performances <- dec_performances |>
 
 In order to explore questions related to scores, a data frame including the constants associated with each event was created. Additional variables were created to discover what necessary marks would to be met to get a certain number of points and what the difference in such marks are. 
 
-```{r}
+```{r Score Calculations}
 
 score_calculations <- data.frame("Event" = c("100m", "Long Jump", "Shot Put", "High Jump",
                                              "400m", "110m Hurdles", "Discuss Throw", 
@@ -112,7 +116,7 @@ score_calculations <- score_calculations |>
 
 In order to investigate how the difficulty of improving in each event, we will create a dataset of the athletes with their highest and lowest scores in each event and find the difference between them. Here, only competitors with 5 or more elite performances were included. 
 
-```{r}
+```{r Event Improvements}
 
 event_improvements <- dec_performances |> 
   group_by(competitor) |>
@@ -173,7 +177,7 @@ summary(dec_performances$men_1500_score)
 
 ```
 
-```{r}
+```{r Day 1 vs. Day 2 Scores}
 
 summary(dec_performances$day1_score)
 summary(dec_performances$day2_score)
@@ -194,7 +198,7 @@ dec_performances |>
 
 ```
 
-```{r}
+```{r Event Improvement Summaries}
 
 summary(event_improvements$improvement_100m)
 summary(event_improvements$improvement_lj)
@@ -210,7 +214,7 @@ summary(event_improvements$improvement_overall)
 
 ```
 
-```{r}
+```{r Event Improvement Means}
 
 event_improvements |> 
   summarize(average_100m = mean(improvement_100m), 
@@ -229,7 +233,8 @@ event_improvements |>
 
 ```
 
-```{r}
+```{r Event Improvement Medians}
+
 event_improvements |> 
   summarize(average_100m = median(improvement_100m), 
             average_lj = median(improvement_lj), 
@@ -249,7 +254,7 @@ event_improvements |>
 
 # Visualizations
 
-```{r}
+```{r Top 100 Scores by Rank}
 
 dec_performances |>
   select(rank, overall_score, day1_score, day2_score) |>
@@ -265,7 +270,7 @@ dec_performances |>
 
 ```
 
-```{r}
+```{r Top 100 Average Scores by Rank}
 
 dec_performances |>
   filter(rank <= 100) |>
@@ -285,7 +290,7 @@ dec_performances |>
 
 ```
 
-```{r}
+```{r Average Event Score}
 
 dec_performances |>
   summarize(average_100_score = sum(men_100_score) / n(),
@@ -309,7 +314,7 @@ dec_performances |>
 
 ```
 
-```{r}
+```{r Overall Score by Elite Performance (Top 16 Athletes)}
 
 dec_performances |>
   select(competitor, overall_score, elite_performance, pr) |>
@@ -327,7 +332,7 @@ dec_performances |>
 
 ```
 
-```{r}
+```{r Overall Scores by Date (Top 16 Athletes)}
 
 dec_performances |>
   select(competitor, overall_score, date, pr) |>
@@ -345,7 +350,7 @@ dec_performances |>
 
 ```
 
-```{r}
+```{r Event Score Summaries}
 
 dec_performances |>
   select(men_100_score, men_110h_score, men_lj_score, men_dt_score, men_sp_score,
@@ -362,7 +367,7 @@ dec_performances |>
 
 ```
 
-```{r}
+```{r Needed Mark for 100 Point Increase by Event}
 
 score_calculations |>
   group_by(Event) |>
@@ -381,7 +386,7 @@ score_calculations |>
 
 ```
 
-```{r}
+```{r Event Improvement Summaries}
 
 event_improvements |>
   select(improvement_100m, improvement_110h, improvement_lj, improvement_dt, 
@@ -399,7 +404,7 @@ event_improvements |>
 
 ```
 
-```{r}
+```{r Kevin Mayer's WR Event Scores}
 
 dec_performances |>
   filter(overall_score == 9126) |>
@@ -415,35 +420,463 @@ dec_performances |>
   
 ```
 
+# Clustering 
+
+```{r kmeans clustering dataset}
+
+dec_kmeans <- dec_performances |>
+  filter(day1_score + day2_score >= 6400) |>
+  mutate(std_day1_score = as.numeric(scale(day1_score)),
+         std_day2_score = as.numeric(scale(day2_score)))
+
+```
+
+```{r kmeans clustering plots (k = 4)}
+
+dec_kmeans_results4 <- dec_kmeans |>
+  select(std_day1_score, std_day2_score) |>
+  kmeans(algorithm = "Lloyd", centers = 4, nstart = 1, iter.max = 100)
+
+dec_kmeans |>
+  mutate(clusters = as.factor(dec_kmeans_results4$cluster)) |>
+  ggplot(aes(x = day1_score, y = day2_score, color = clusters)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) +
+  labs(title = "K-means Clustering by Day 1 Score vs. Day 2 Score", 
+       subtitle = "k = 4, variables are standardized",
+       y = "Day 2 Score", x = "Day 1 Score", color = "Cluster") 
+
+dec_kmeans |>
+  mutate(clusters = as.factor(dec_kmeans_results4$cluster)) |>
+  ggplot(aes(x = std_day1_score, y = std_day2_score, color = clusters)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) +
+  labs(title = "K-means Clustering by Day 1 Score vs. Day 2 Score", 
+       subtitle = "k = 4, variables are standardized",
+       y = "Standardized Day 2 Score", x = "Standardized Day 1 Score", color = "Cluster") 
+
+```
+
+```{r kmeans clustering plots (k = 3)}
+
+dec_kmeans_results3 <- dec_kmeans |>
+  select(std_day1_score, std_day2_score) |>
+  kmeans(algorithm = "Lloyd", centers = 3, nstart = 1, iter.max = 100)
+
+dec_kmeans |>
+  mutate(clusters = as.factor(dec_kmeans_results3$cluster)) |>
+  ggplot(aes(x = day1_score, y = day2_score, color = clusters)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) +
+  labs(title = "K-means Clustering by Day 1 Score vs. Day 2 Score", 
+       subtitle = "k = 3, variables are standardized",
+       y = "Day 2 Score", x = "Day 1 Score", color = "Cluster") 
+
+dec_kmeans |>
+  mutate(clusters = as.factor(dec_kmeans_results3$cluster)) |>
+  ggplot(aes(x = std_day1_score, y = std_day2_score, color = clusters)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) +
+  labs(title = "K-means Clustering by Day 1 Score vs. Day 2 Score", 
+       subtitle = "k = 3, variables are standardized",
+       y = "Standardized Day 2 Score", x = "Standardized Day 1 Score", color = "Cluster") 
+
+```
+
+```{r kmeans clustering plots (k = 2)}
+
+dec_kmeans_results2 <- dec_kmeans |>
+  select(std_day1_score, std_day2_score) |>
+  kmeans(algorithm = "Lloyd", centers = 2, nstart = 1, iter.max = 100)
+
+dec_kmeans |>
+  mutate(clusters = as.factor(dec_kmeans_results2$cluster)) |>
+  ggplot(aes(x = day1_score, y = day2_score, color = clusters)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) +
+  labs(title = "K-means Clustering by Day 1 Score vs. Day 2 Score", 
+       subtitle = "k = 2, variables are standardized",
+       y = "Day 2 Score", x = "Day 1 Score", color = "Cluster") 
+
+dec_kmeans |>
+  mutate(clusters = as.factor(dec_kmeans_results2$cluster)) |>
+  ggplot(aes(x = std_day1_score, y = std_day2_score, color = clusters)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5)) +
+  labs(title = "K-means Clustering by Day 1 Score vs. Day 2 Score", 
+       subtitle = "k = 2, variables are standardized",
+       y = "Standardized Day 2 Score", x = "Standardized Day 1 Score", color = "Cluster")
+
+```
+
+```{r kmeans elbow plot}
+
+dec_kmeans |> 
+  select(std_day1_score, std_day2_score) |> 
+  fviz_nbclust(kmeans, method = "wss")
+
+```
+
+```{r kmeans silhouette plot}
+
+dec_kmeans |> 
+  select(std_day1_score, std_day2_score) |> 
+  fviz_nbclust(kmeans, method = "silhouette")
+
+```
+
+```{r Hierarchical Clustering (Filtering >= 5000)}
+
+dec_hclust <- dec_performances |>
+  filter(day1_score + day2_score >= 5000) |>
+  mutate(std_day1_score = as.numeric(scale(day1_score)),
+         std_day2_score = as.numeric(scale(day2_score)))
+
+dec_hclust |>
+  ggplot(aes(x = std_day1_score, y = std_day2_score)) +
+  geom_point(color = "dodgerblue", alpha = 0.2) + 
+  labs(y = "Day 2 Score", x = "Day 1 Score")
+
+```
+
+```{r Hierarchical Clustering (Filtering >= 6400)}
+
+dec_hclust2 <- dec_performances |>
+  filter(day1_score + day2_score >= 6400) |>
+  mutate(std_day1_score = as.numeric(scale(day1_score)),
+         std_day2_score = as.numeric(scale(day2_score)))
+
+dec_hclust2 |>
+  ggplot(aes(x = std_day1_score, y = std_day2_score)) +
+  geom_point(color = "dodgerblue", alpha = 0.2) + 
+  labs(y = "Day 2 Score", x = "Day 1 Score")
+
+```
+
+```{r Distance Matrix (Filtering >= 5000)}
+
+dec_dist <- dec_hclust |>
+  select(std_day1_score, std_day2_score) |>
+  dist()
+
+dec_dist_matrix <- as.matrix(dec_dist)
+rownames(dec_dist_matrix) <- dec_hclust$competitor
+colnames(dec_dist_matrix) <- dec_hclust$competitor
+dec_dist_matrix[1:4, 1:4]
+
+```
+
+```{r Distance Matrix (Filtering >= 6400)}
+
+dec_dist2 <- dec_hclust2 |>
+  select(std_day1_score, std_day2_score) |>
+  dist()
+
+dec_dist_matrix2 <- as.matrix(dec_dist2)
+rownames(dec_dist_matrix2) <- dec_hclust2$competitor
+colnames(dec_dist_matrix2) <- dec_hclust2$competitor
+dec_dist_matrix2[1:4, 1:4]
+
+```
+
+```{r Complete Linkage (Filtering >= 5000)}
+
+dec_complete <- dec_dist |>
+  hclust(method = "complete")
+
+dec_complete |> 
+  ggdendrogram(labels = FALSE, 
+               leaf_labels = FALSE,
+               theme_dendro = FALSE) +  
+  geom_hline(yintercept = 5, color = "red") +
+  labs(y = "Dissimilarity between clusters") +
+  theme(axis.text.x = element_blank(), 
+        axis.title.x = element_blank(),
+        panel.grid = element_blank())
+
+```
+
+```{r Complete Linkage (Filtering >= 6400)}
+
+dec_complete2 <- dec_dist2 |>
+  hclust(method = "complete")
+
+dec_complete2 |> 
+  ggdendrogram(labels = FALSE, 
+               leaf_labels = FALSE,
+               theme_dendro = FALSE) +  
+  geom_hline(yintercept = 4.5, color = "red") +
+  labs(y = "Dissimilarity between clusters") +
+  theme(axis.text.x = element_blank(), 
+        axis.title.x = element_blank(),
+        panel.grid = element_blank())
+
+```
+
+```{r Clustering Visual (Filtering >= 5000)}
+
+dec_hclust |>
+  mutate(cluster = as.factor(cutree(dec_complete, h = 5))) |>
+  ggplot(aes(x = day1_score, y = day2_score, color = cluster)) +
+  geom_point(alpha = 0.4) + 
+  scale_color_manual(values = c("darkred", "#005AB5", "#222222", "#ffcad4")) + 
+  theme_minimal() + 
+  labs(y = "Day 2 Score", x = "Day 1 Score", color = "Cluster")
+
+```
+
+```{r Cluster Summaries (Filtered >= 5000)}
+
+dec_hclust |>
+  mutate(cluster = as.factor(cutree(dec_complete, h = 5))) |>
+  group_by(cluster) |>
+  summarize(mean_day1_score = mean(day1_score),
+            mean_day2_score = mean(day2_score),
+            mean_overall_score = mean(overall_score),
+            mean_world_ranking_score = mean(world_athletics_event_ranking_score)) |>
+  arrange(desc(mean_overall_score))
+
+```
+
+```{r Clustering Visual - 2 Clusters (Filtering >= 6400)}
+
+dec_hclust2 |>
+  mutate(cluster = as.factor(cutree(dec_complete2, h = 6))) |>
+  ggplot(aes(x = day1_score, y = day2_score, color = cluster)) +
+  geom_point(alpha = 0.4) + 
+  scale_color_manual(values = c("darkred", "#005AB5", "#222222", "#ffcad4")) + 
+  theme_minimal() + 
+  labs(y = "Day 2 Score", x = "Day 1 Score", color = "Cluster")
+
+```
+
+```{r Clustering Visual - 3 Clusters (Filtering >= 6400)}
+
+dec_hclust2 |>
+  mutate(cluster = as.factor(cutree(dec_complete2, h = 5))) |>
+  ggplot(aes(x = day1_score, y = day2_score, color = cluster)) +
+  geom_point(alpha = 0.4) + 
+  scale_color_manual(values = c("darkred", "#005AB5", "#222222", "#ffcad4")) + 
+  theme_minimal() + 
+  labs(y = "Day 2 Score", x = "Day 1 Score", color = "Cluster")
+
+```
+
+```{r Clustering Visual - 4 Clusters (Filtering >= 6400)}
+
+dec_hclust2 |>
+  mutate(cluster = as.factor(cutree(dec_complete2, h = 4.5))) |>
+  ggplot(aes(x = day1_score, y = day2_score, color = cluster)) +
+  geom_point(alpha = 0.4) + 
+  scale_color_manual(values = c("darkred", "#005AB5", "#222222", "#ffcad4")) + 
+  theme_minimal() + 
+  labs(y = "Day 2 Score", x = "Day 1 Score", color = "Cluster")
+
+```
+
+```{r Cluster Summaries (Filtered >= 6400)}
+
+dec_hclust2 |>
+  mutate(cluster = as.factor(cutree(dec_complete2, h = 4.5))) |>
+  group_by(cluster) |>
+  summarize(mean_day1_score = mean(day1_score),
+            mean_day2_score = mean(day2_score),
+            mean_overall_score = mean(overall_score),
+            mean_world_ranking_score = mean(world_athletics_event_ranking_score)) |>
+  arrange(desc(mean_overall_score))
+
+```
+
+```{r Post-Clustering Analysis (age, elite performance, meet ranking)}
+
+table("Cluster" = cutree(dec_complete2, h = 4.5), 
+      "Age" = dec_hclust2$age)
+table("Cluster" = cutree(dec_complete2, h = 4.5), 
+      "Elite Performance" = dec_hclust2$elite_performance)
+table("Cluster" = cutree(dec_complete2, h = 4.5), 
+      "Meet Ranking" = dec_hclust2$pos_sec)
+
+```
+
+```{r Post-Clustering Analysis (world athletics rank groups)}
+
+dec_hclust2 <- dec_hclust2 |>
+  mutate(world_ranking_score_group = case_when(world_athletics_event_ranking_score < 900 ~ "A (< 900)", world_athletics_event_ranking_score < 950 ~ "B (900-949)", world_athletics_event_ranking_score < 1000 ~ "C (950-999)", world_athletics_event_ranking_score < 1050 ~ "D (1000-1049)", world_athletics_event_ranking_score < 1100 ~ "E (1050-1099)", world_athletics_event_ranking_score < 1150 ~ "F (1100-1149)", world_athletics_event_ranking_score < 1200 ~ "G (1150-1199)", world_athletics_event_ranking_score < 1250 ~ "H (1200-1249)", world_athletics_event_ranking_score >= 1250 ~ "I (1250+)"))
+
+table("Cluster" = cutree(dec_complete2, h = 4.5), 
+      "Score Group" = dec_hclust2$world_ranking_score_group)
+
+```
+
+```{r Clustering Summaries (Filtering >= 6400)}
+
+summary(dec_hclust2$day1_score)
+summary(dec_hclust2$day2_score)
+summary(dec_hclust2$overall_score)
+summary(dec_hclust2$world_athletics_event_ranking_score)
+
+```
+
+```{r Post-Clustering Analysis (day 1 and day 2 score groupings for 2)}
+
+dec_hclust2 <- dec_hclust2 |>
+  mutate(day1_score_group2 = case_when(day1_score < 3747 ~ "Below Average",
+                                      day1_score >= 3747 ~ "Above Average"), 
+         day2_score_group2 = case_when(day2_score < 3423 ~ "Below Average",
+                                      day2_score >= 3423 ~ "Above Average"))
+
+dec_hclust2 <- dec_hclust2 |>
+  mutate(overall_score_group2 = case_when(day1_score_group2 == "Below Average" & day2_score_group2 == "Below Average" ~ "BA Day 1 + BA Day 2", 
+                                          day1_score_group2 == "Below Average" & day2_score_group2 == "Above Average" ~ "BA Day 1 + A+ Day 2", 
+                                          day1_score_group2 == "Above Average" & day2_score_group2 == "Below Average" ~ "A+ Day 1 + BA Day 2", 
+                                          day1_score_group2 == "Above Average" & day2_score_group2 == "Above Average" ~ "A+ Day 1 + A+ Day 2"))
+
+table("Cluster" = cutree(dec_complete2, h = 4.5), 
+      "Score Group" = dec_hclust2$day1_score_group2)
+
+table("Cluster" = cutree(dec_complete2, h = 4.5), 
+      "Score Group" = dec_hclust2$day2_score_group2)
+
+table("Cluster" = cutree(dec_complete2, h = 4.5), 
+      "Score Group" = dec_hclust2$overall_score_group2)
+
+```
+
+```{r Post-Clustering Analysis (day 1 and day 2 score groupings for 3)}
+
+dec_hclust2 <- dec_hclust2 |>
+  mutate(day1_score_group3 = case_when(day1_score < 3566 ~ "Below Average", 
+                                      day1_score < 3942 ~ "Average",
+                                      day1_score >= 3942 ~ "Above Average"), 
+         day2_score_group3 = case_when(day2_score < 3206 ~ "Below Average", 
+                                      day2_score < 3670 ~ "Average",
+                                      day2_score >= 3670 ~ "Above Average"))
+
+dec_hclust2 <- dec_hclust2 |>
+  mutate(overall_score_group3 = case_when(day1_score_group3 == "Below Average" & day2_score_group3 == "Below Average" ~ "BA Day 1 + BA Day 2", 
+                                          day1_score_group3 == "Below Average" & day2_score_group3 == "Average" ~ "BA Day 1 + Avg Day 2", 
+                                          day1_score_group3 == "Below Average" & day2_score_group3 == "Above Average" ~ "BA Day 1 + A+ Day 2", 
+                                          day1_score_group3 == "Average" & day2_score_group3 == "Below Average" ~ "Avg Day 1 + BA Day 2", 
+                                          day1_score_group3 == "Average" & day2_score_group3 == "Average" ~ "Avg Day 1 + Avg Day 2", 
+                                          day1_score_group3 == "Average" & day2_score_group3 == "Above Average" ~ "Avg Day 1 + A+ Day 2", 
+                                          day1_score_group3 == "Above Average" & day2_score_group3 == "Below Average" ~ "A+ Day 1 + BA Day 2", 
+                                          day1_score_group3 == "Above Average" & day2_score_group3 == "Average" ~ "A+ Day 1 + Avg Day 2", 
+                                          day1_score_group3 == "Above Average" & day2_score_group3 == "Above Average" ~ "A+ Day 1 + A+ Day 2"))
+
+table("Cluster" = cutree(dec_complete2, h = 4.5), 
+      "Score Group" = dec_hclust2$day1_score_group3)
+
+table("Cluster" = cutree(dec_complete2, h = 4.5), 
+      "Score Group" = dec_hclust2$day2_score_group3)
+
+table("Cluster" = cutree(dec_complete2, h = 4.5), 
+      "Score Group" = dec_hclust2$overall_score_group3)
+
+```
+
+```{r Hierarchical Clustering Silhouette Plot (Filtering >= 6400)}
+
+dec_features2 <- dec_hclust2 |> 
+  select(std_day1_score, std_day2_score)
+
+dec_features2 |> 
+  fviz_nbclust(FUN = hcut, method = "silhouette")
+  
+```
+
+```{r Single Linkage (Filtered >= 6400)} 
+
+dec_single2 <- dec_dist2 |>
+  hclust(method = "single")
+
+dec_single2 |> 
+  ggdendrogram(labels = FALSE, 
+               leaf_labels = FALSE,
+               theme_dendro = FALSE) +  
+  labs(y = "Dissimilarity between clusters") +
+  theme(axis.text.x = element_blank(), 
+        axis.title.x = element_blank(),
+        panel.grid = element_blank())
+
+dec_hclust2 |>
+  mutate(cluster = as.factor(cutree(dec_single2, k = 4))) |>
+  ggplot(aes(x = std_day1_score, y = std_day2_score, color = cluster)) +
+  geom_point(alpha = 0.5) + 
+  labs(y = "Day 2 Score", x = "Day 1 Score", color = "Cluster")
+
+```
+
+```{r Average Linkage (Filtered >= 6400)} 
+
+dec_average2 <- dec_dist2 |>
+  hclust(method = "average") 
+
+dec_average2 |> 
+  ggdendrogram(labels = FALSE, 
+               leaf_labels = FALSE,
+               theme_dendro = FALSE) +  
+  labs(y = "Dissimilarity between clusters") +
+  theme(axis.text.x = element_blank(), 
+        axis.title.x = element_blank(),
+        panel.grid = element_blank())
+
+dec_hclust2 |>
+  mutate(cluster = as.factor(cutree(dec_average2, k = 4))) |>
+  ggplot(aes(x = std_day1_score, y = std_day2_score, color = cluster)) +
+  geom_point(alpha = 0.5) + 
+  labs(y = "Day 2 Score", x = "Day 1 Score", color = "Cluster")
+
+```
+
 ```{r Gaussian Mixture Model}
 
 dec_mclust <- dec_performances |>
-  select(men_100_score, men_lj_score, men_sp_score, men_hj_score, men_400_score,
-         men_110h_score, men_dt_score, men_pv_score, men_jt_score, men_1500_score) |>
-  mutate(men_dt_score = ifelse(is.na(men_dt_score), 0, men_dt_score)) |>
+  filter(day1_score + day2_score >= 6400) |>
+  select(day1_score, day2_score) |>
   Mclust()
-
-```
-
-```{r}
 
 summary(dec_mclust)
 
+gt(tidy(dec_mclust))
+
 ```
 
-```{r}
-
-gt(tidy(dec_mclust))
+```{r GMM visual}
 
 dec_mclust |> 
   augment() |> 
-  ggplot(aes(x = men_1500_score , y = men_400_score, 
+  ggplot(aes(x = day1_score , y = day2_score, 
              color = .class, size = .uncertainty)) +
-  geom_point(alpha = 0.5)
+  geom_point(alpha = 0.2) + 
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  labs(title = "GMM Clustering by Day 1 Score and Day 2 Score", 
+       y = "Day 2 Score", x = "Day 1 Score", 
+       color = "Class", size = "Uncertainty")
+
+```
+
+```{r BIC Plot}
 
 dec_mclust |> 
   plot(what = "BIC", 
        legendArgs = list(x = "bottomright", ncol = 4))
+
+```
+
+```{r Classification Plot} 
 
 dec_mclust |> 
   plot(what = "classification")
@@ -452,19 +885,12 @@ dec_mclust |>
 
 ```{r}
 
-table("Clusters" = dec_mclust$classification, "Age" = dec_performances$age)
-
-```
-
-```{r}
-
 dec_probs <- dec_mclust$z
-colnames(dec_probs) <- str_c("cluster", 1:8)
+colnames(dec_probs) <- str_c("cluster", 1:5)
 
 dec_probs <- dec_probs |>
   as_tibble() |>
-  mutate(competitor = dec_performances$competitor, age = dec_performances$age) |>
-  pivot_longer(-c(competitor, age), names_to = "cluster", values_to = "prob")
+  pivot_longer(cluster1:cluster5, names_to = "cluster", values_to = "prob")
 
 dec_probs |>
   ggplot(aes(prob)) +
